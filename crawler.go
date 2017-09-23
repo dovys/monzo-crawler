@@ -2,12 +2,19 @@ package crawler
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"net/url"
 	"sync"
 )
 
+var (
+	ErrTooManyRequests   = errors.New("Too many requests")
+	ErrQueueLimitReached = errors.New("Queue limit reached")
+)
+
 type Crawler interface {
-	Enqueue(*url.URL)
+	Enqueue(*url.URL) error
 	Run(context.Context) (<-chan *Page, <-chan error)
 }
 
@@ -21,12 +28,13 @@ type CrawlerOption func(*crawler)
 
 func NewCrawler(p Parser, f Fetcher, u UniqueSet, options ...CrawlerOption) Crawler {
 	c := &crawler{
-		queue:       make(chan *url.URL, 100000000),
-		concurrency: 5,
-		parser:      p,
-		fetcher:     f,
-		uniqueSet:   u,
-		wg:          sync.WaitGroup{},
+		queue:              make(chan *url.URL, 1000000),
+		concurrency:        5,
+		parser:             p,
+		fetcher:            f,
+		uniqueSet:          u,
+		wg:                 sync.WaitGroup{},
+		resultBufferLength: 100,
 	}
 
 	for _, f := range options {
@@ -42,29 +50,49 @@ func Concurrency(limit int) CrawlerOption {
 	}
 }
 
-type crawler struct {
-	queue       chan *url.URL
-	concurrency int
-	wg          sync.WaitGroup
-	parser      Parser
-	fetcher     Fetcher
-	uniqueSet   UniqueSet
+func MaxQueueLength(length int) CrawlerOption {
+	return func(c *crawler) {
+		c.queue = make(chan *url.URL, length)
+	}
 }
 
-func (c *crawler) Enqueue(u *url.URL) {
+func ResultBufferLength(length int) CrawlerOption {
+	return func(c *crawler) {
+		c.resultBufferLength = length
+	}
+}
+
+type crawler struct {
+	// options
+	concurrency        int
+	resultBufferLength int
+
+	queue     chan *url.URL
+	wg        sync.WaitGroup
+	parser    Parser
+	fetcher   Fetcher
+	uniqueSet UniqueSet
+}
+
+func (c *crawler) Enqueue(u *url.URL) error {
 	// Making sure to not crawl the same page more than once
 	if !c.uniqueSet.AddIfNotExists(u) {
-		return
+		return nil
 	}
 
-	c.wg.Add(1)
-	c.queue <- u
+	select {
+	case c.queue <- u:
+		c.wg.Add(1)
+	default:
+		return ErrQueueLimitReached
+	}
+
+	return nil
 }
 
 func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
-	// 1000?
-	errors := make(chan error, c.concurrency)
-	results := make(chan *Page, c.concurrency)
+	errors := make(chan error, c.resultBufferLength)
+	results := make(chan *Page, c.resultBufferLength)
 	// Finished is used to stop goroutines after the queue is emptied
 	finished := make(chan bool)
 	// Running is used to make sure all goroutines are finished before the results and errors
@@ -76,9 +104,9 @@ func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
 		close(finished)
 	}()
 
+	running.Add(c.concurrency)
 	for i := 0; i < c.concurrency; i++ {
 		go func() {
-			running.Add(1)
 			defer running.Done()
 
 			for {
@@ -101,7 +129,9 @@ func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
 					results <- page
 
 					for _, link := range page.Links {
-						c.Enqueue(link)
+						if err := c.Enqueue(link); err != nil {
+							errors <- err
+						}
 					}
 
 					c.wg.Done()
@@ -122,6 +152,10 @@ func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
 func (c *crawler) crawl(u *url.URL) (*Page, error) {
 	b, err := c.fetcher.Fetch(u.String())
 	if err != nil {
+		if e, ok := err.(*HTTPError); ok && e.StatusCode == http.StatusTooManyRequests {
+			return nil, ErrTooManyRequests
+		}
+
 		return nil, err
 	}
 

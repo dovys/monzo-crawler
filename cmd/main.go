@@ -19,6 +19,7 @@ type pageResult struct {
 }
 
 func main() {
+	// concurrency limit used as a throttling mechanism instead of doing req/s
 	h := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Preventing redirects to a different host
@@ -53,12 +54,12 @@ func main() {
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
 		for err := range errors {
-			logger.Println(err)
-
-			if e, ok := err.(*crawler.HTTPError); ok && e.StatusCode == http.StatusTooManyRequests {
+			if err == crawler.ErrTooManyRequests {
 				logger.Println("Stopping due to too many requests")
 				cancel()
 			}
+
+			logger.Println(err)
 		}
 	}()
 
