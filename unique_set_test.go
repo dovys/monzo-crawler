@@ -24,11 +24,3 @@ func TestURLFragmentsAreIgnored(t *testing.T) {
 	anchored, _ := url.Parse("https://www.facebook.com/home#jump-to-headline")
 	assert.False(t, s.AddIfNotExists(anchored))
 }
-
-func BenchmarkAdd(b *testing.B) {
-	s := NewUniqueSet()
-
-	for i := 0; i < b.N; i++ {
-		s.AddIfNotExists(&url.URL{Host: "mydomain.com/" + string(i)})
-	}
-}

@@ -20,7 +20,6 @@ var body = `
 			<a href="https://mydomain.com/account">Acount</a>
 			<a href='http://mydomain.com/images'></a>
 			<a href="//www.youtube.com/?"></a>
-			<a href=""></a>
 			<a href="/home">
 				<img src="/home.jpg" />
 			</a>
@@ -80,4 +79,27 @@ func TestParseRelativeURLs(t *testing.T) {
 
 	require.Len(t, links, 1)
 	assert.Equal(t, "https://mydomain.com/issues/351", links[0].String())
+}
+
+func TestParseEmptyURLsAreIgnored(t *testing.T) {
+	p := NewParser()
+
+	body := `<html>
+		<head>
+			<link rel="stylesheet" href="">
+			<script src=""></script>			
+		</head>
+		<body>
+			<a href="">link</a>
+			<node />
+			<a></a>
+			<img>
+			<img src="" />
+		</body>
+	</html>`
+
+	uri, _ := url.Parse("https://mydomain.com/issues")
+	links, _ := p.Parse(uri, []byte(body))
+
+	require.Len(t, links, 0)
 }

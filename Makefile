@@ -16,7 +16,6 @@ build:
 	go build -o $(BINARY) $(CMD_PATH)
 
 test:
-	go test -v
-	go test -race -v -run "TestConcurrentCrawls"
+	go test -race -v -cover
 
 .PHONY: install build test

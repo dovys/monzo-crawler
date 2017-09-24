@@ -21,6 +21,7 @@ type pageResult struct {
 func main() {
 	// concurrency limit used as a throttling mechanism instead of doing req/s
 	h := &http.Client{
+		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Preventing redirects to a different host
 			for _, v := range via {
@@ -84,5 +85,5 @@ func main() {
 		e.Encode(p)
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(2 * time.Second) // remove
 }

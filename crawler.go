@@ -110,31 +110,38 @@ func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
 			defer running.Done()
 
 			for {
+				// Since select is pseudo random when two or more cases can proceed
+				// we need to have a select in select to prioritise cancelling over continuing.
 				select {
-				// Queue is empty
-				case <-finished:
-					return
 				// Cancelled
 				case <-ctx.Done():
 					return
+				default:
 
-				// Work to be done
-				case u := <-c.queue:
-					page, err := c.crawl(u)
-					if err != nil {
-						errors <- err
-						break
-					}
+					select {
+					// Queue is empty
+					case <-finished:
+						return
 
-					results <- page
-
-					for _, link := range page.Links {
-						if err := c.Enqueue(link); err != nil {
+					// Work to be done
+					case u := <-c.queue:
+						page, err := c.crawl(u)
+						if err != nil {
 							errors <- err
+							c.wg.Done()
+							break
 						}
-					}
 
-					c.wg.Done()
+						results <- page
+
+						for i := 0; i < len(page.Links); i++ {
+							if err := c.Enqueue(page.Links[i]); err != nil {
+								errors <- err
+							}
+						}
+
+						c.wg.Done()
+					}
 				}
 			}
 		}()
@@ -161,9 +168,9 @@ func (c *crawler) crawl(u *url.URL) (*Page, error) {
 
 	links, assets := c.parser.Parse(u, b)
 	linksOnSameHost := make([]*url.URL, 0)
-	for _, link := range links {
-		if link.Host == u.Host {
-			linksOnSameHost = append(linksOnSameHost, link)
+	for i := 0; i < len(links); i++ {
+		if links[i].Host == u.Host {
+			linksOnSameHost = append(linksOnSameHost, links[i])
 		}
 	}
 
