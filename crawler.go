@@ -109,14 +109,12 @@ func (c *crawler) Run(ctx context.Context) (<-chan *Page, <-chan error) {
 			defer running.Done()
 
 			for {
-				// Since select is pseudo random when two or more cases can proceed
-				// we need to have a select in select to prioritise cancelling over continuing.
+				// Prioritising cancellation
 				select {
 				// Cancelled
 				case <-ctx.Done():
 					return
 				default:
-
 					select {
 					// Queue is empty
 					case <-finished:
