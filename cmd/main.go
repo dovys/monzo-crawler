@@ -3,14 +3,25 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"time"
 
+	"github.com/kelseyhightower/envconfig"
+	"github.com/pkg/errors"
+
 	crawler "github.com/dovys/monzo-crawler"
 )
+
+type Config struct {
+	HTTPTimeout        time.Duration `envconfig:"http_timeout" default:"10s"`
+	Concurrency        int           `envconfig:"concurrency" default:"5"`
+	ResultBufferLength int           `envconfig:"result_buffer" default:"5"`
+	MaxQueueLength     int           `envconfig:"queue_length" default:"5"`
+}
 
 type pageResult struct {
 	URL    string   `json:"url"`
@@ -19,9 +30,27 @@ type pageResult struct {
 }
 
 func main() {
-	// concurrency limit used as a throttling mechanism instead of doing req/s
+	var cfg Config
+	envconfig.MustProcess("", &cfg)
+
+	if len(os.Args) != 2 {
+		fmt.Printf("Usage: %s <url>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	uri, err := url.Parse(os.Args[1])
+	if err != nil {
+		fmt.Println(errors.Wrap(err, "Invalid url"))
+		os.Exit(1)
+	}
+
+	if uri.Scheme != "https" && uri.Scheme != "http" {
+		fmt.Println("Supported schemes: http, https.")
+		os.Exit(1)
+	}
+
 	h := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: cfg.HTTPTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Preventing redirects to a different host
 			for _, v := range via {
@@ -38,15 +67,13 @@ func main() {
 		crawler.NewParser(),
 		crawler.NewFetcher(h),
 		crawler.NewUniqueSet(),
+
+		crawler.Concurrency(cfg.Concurrency),
+		crawler.ResultBufferLength(cfg.ResultBufferLength),
+		crawler.MaxQueueLength(cfg.MaxQueueLength),
 	)
 
-	root, err := url.Parse("http://steamcommunity.com/market/")
-	// root, err := url.Parse("https://getacorn.com")
-	if err != nil {
-		panic(err)
-	}
-
-	c.Enqueue(root)
+	c.Enqueue(uri)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

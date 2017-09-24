@@ -63,7 +63,6 @@ func ResultBufferLength(length int) CrawlerOption {
 }
 
 type crawler struct {
-	// options
 	concurrency        int
 	resultBufferLength int
 
