@@ -19,8 +19,8 @@ import (
 type Config struct {
 	HTTPTimeout        time.Duration `envconfig:"http_timeout" default:"10s"`
 	Concurrency        int           `envconfig:"concurrency" default:"5"`
-	ResultBufferLength int           `envconfig:"result_buffer" default:"5"`
-	MaxQueueLength     int           `envconfig:"queue_length" default:"5"`
+	ResultBufferLength int           `envconfig:"result_buffer" default:"100"`
+	MaxQueueLength     int           `envconfig:"queue_length" default:"1000000"`
 }
 
 type pageResult struct {
@@ -111,6 +111,4 @@ func main() {
 
 		e.Encode(p)
 	}
-
-	time.Sleep(2 * time.Second) // remove
 }
