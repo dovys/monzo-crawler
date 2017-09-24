@@ -40,7 +40,7 @@ func setup(concurrencyLimit, maxQueueLength, resultBufferLength int) *testSuite 
 	return &testSuite{c: c, p: p, f: f}
 }
 
-func TestSamePageIsCrawledOnce(t *testing.T) {
+func TestSamePageIsOnlyCrawledOnce(t *testing.T) {
 	s := setup(1, 100, 100)
 	root, _ := url.Parse("https://google.com")
 	link, _ := url.Parse("https://google.com/about")
@@ -154,7 +154,7 @@ func TestHTTPErrorsDontStopExecution(t *testing.T) {
 	assert.Equal(t, err, errors[0])
 }
 
-func TestCancellationLetsCurrentCrawlsFinish(t *testing.T) {
+func TestCancellationLetsCurrentCrawlFinish(t *testing.T) {
 	s := setup(1, 100, 100)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

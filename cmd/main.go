@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -51,6 +52,9 @@ func main() {
 
 	h := &http.Client{
 		Timeout: cfg.HTTPTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Preventing redirects to a different host
 			for _, v := range via {
